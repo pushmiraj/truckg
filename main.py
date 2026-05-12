@@ -42,7 +42,13 @@ from src.evaluation import (
     plot_feature_importance,
     plot_maintenance_comparison,
     plot_weather_delay_impact,
+    plot_pricing_scenarios,
+    plot_pricing_sensitivity,
+    plot_distance_sensitivity,
+    plot_p_return_roc_pr,
 )
+from src.pricing import FreightPricingEngine, DEMO_SCENARIOS, PricingInput
+from src.return_load_model import build_return_load_dataset, train_return_load_model
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -176,6 +182,82 @@ def train_regression(
     save_model(reg, "ml/model_regression.pkl")
 
 
+def train_p_return(show_plots: bool = True) -> None:
+    """Train the return-load probability model and save all artefacts."""
+    print("\n" + "=" * 62)
+    print("  Task 3: Return-Load Probability Model  (p_return)")
+    print("=" * 62)
+    print(
+        "\n  Target proxy: is_market  (Market=1 = spot lane active"
+        " => return load available)"
+    )
+    print("  Models: Logistic Regression  +  XGBoost  (PDF spec)")
+
+    print("\nBuilding return-load dataset ...")
+    X_rl, y_rl = build_return_load_dataset()
+    print(f"  Feature matrix : {X_rl.shape}")
+    print(f"  Features       : {list(X_rl.columns)}")
+
+    eval_dict = train_return_load_model(X_rl, y_rl, save_dir="ml")
+
+    if show_plots:
+        plot_p_return_roc_pr(eval_dict, save_path="ml/p_return_evaluation.png")
+
+
+def run_pricing_demo(show_plots: bool = True) -> None:
+    """Run the 5-layer Risk-Quantified Dynamic Pricing Engine on all demo scenarios."""
+    print("\n" + "=" * 62)
+    print("  FreightIQ — Risk-Quantified Dynamic Pricing Engine")
+    print("=" * 62)
+
+    engine = FreightPricingEngine()
+    results = []
+
+    for scenario in DEMO_SCENARIOS:
+        result = engine.compute(scenario)
+        results.append(result)
+        print(result.summary())
+
+    # ── Sensitivity: p_return sweep (using Scenario 1 as baseline) ────────
+    print("\n--- p_return Sensitivity Table (Scenario: TN Metro baseline) ---")
+    sweep_df = engine.sweep_p_return(DEMO_SCENARIOS[0], n=11)
+    print(sweep_df.to_string(index=False))
+
+    # ── Sensitivity: distance sweep ────────────────────────────────────────
+    print("\n--- Distance Sensitivity Table ---")
+    dist_df = engine.sweep_distance(DEMO_SCENARIOS[0])
+    print(dist_df.to_string(index=False))
+
+    # ── Summary table across all scenarios ────────────────────────────────
+    print("\n--- All-Scenario Summary ---")
+    summary_rows = []
+    for r in results:
+        summary_rows.append({
+            "Scenario": r.label,
+            "Base Cost": f"INR {r.base_cost_modified:,.0f}",
+            "Risk Cost": f"INR {r.risk_cost:,.0f}",
+            "Risk Factor": f"{r.risk_factor:.4f}",
+            "Market Adj": f"{r.market_adj:.4f}",
+            "Model Price": f"INR {r.model_price:,.0f}",
+            "Quoted Price": f"INR {r.quoted_price:,.0f}",
+            "Booking Prob": f"{r.p_book * 100:.1f}%",
+            "Exp Profit": f"INR {r.expected_profit:,.0f}",
+            "Driver Earn": f"INR {r.driver_earnings:,.0f}",
+            "Feasible": "YES" if r.feasible else "NO",
+        })
+    summary_df = pd.DataFrame(summary_rows)
+    print(summary_df.to_string(index=False))
+
+    if show_plots:
+        plot_pricing_scenarios(results, save_path="ml/pricing_scenarios.png")
+        plot_pricing_sensitivity(
+            sweep_df,
+            title="TN Metro Baseline",
+            save_path="ml/pricing_sensitivity_p_return.png",
+        )
+        plot_distance_sensitivity(dist_df, save_path="ml/pricing_sensitivity_distance.png")
+
+
 def analyse_maintenance(show_plots: bool = True) -> None:
     print("\n--- EV vs Petrol Maintenance Cost Analysis ---")
     ev, petrol = load_q10_maintenance()
@@ -212,8 +294,10 @@ def main() -> None:
     train_classification(X_clf, y_clf, show_plots=show)
     train_regression(X_reg, y_reg, show_plots=show)
     analyse_maintenance(show_plots=show)
+    train_p_return(show_plots=show)
+    run_pricing_demo(show_plots=show)
 
-    print("\nDone. Artefacts written to ml/"  )
+    print("\nDone. Artefacts written to ml/")
 
 
 if __name__ == "__main__":

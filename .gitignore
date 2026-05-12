@@ -32,3 +32,11 @@ Thumbs.db
 *.xlsx
 *.xls
 *.csv
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# Environment secrets
+.env
+frontend/.env
