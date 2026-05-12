@@ -249,15 +249,15 @@ def five_layer_price(
     final        = max(market, margin_floor)
 
     return {
-        "operational":   round(base,     2),
-        "risk_adjusted": round(risk_adj, 2),
-        "ml_optimized":  round(ml_price, 2),
-        "market_price":  round(market,   2),
-        "final_price":   round(final,    2),
+        "operational":   round(base     / 150, 2),
+        "risk_adjusted": round(risk_adj / 150, 2),
+        "ml_optimized":  round(ml_price / 150, 2),
+        "market_price":  round(market   / 150, 2),
+        "final_price":   round(final    / 150, 2),
         "risk_factor":   round(risk_mult, 4),
         "efficiency":    round(efficiency, 4),
         "capped":        not (mkt_low <= ml_price <= mkt_high),
-        "corridor_avg":  round(corridor, 2),
+        "corridor_avg":  round(corridor / 150, 2),
     }
 
 # ---------------------------------------------------------------------------
