@@ -39,4 +39,6 @@ frontend/dist/
 
 # Environment secrets
 .env
+.env.example
 frontend/.env
+frontend/.env.example
