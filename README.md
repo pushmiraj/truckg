@@ -9,16 +9,20 @@
 
 1. [Project Overview](#1-project-overview)
 2. [Repository Structure](#2-repository-structure)
-3. [Quick Start](#3-quick-start)
-4. [Dataset](#4-dataset)
-5. [ML Pipeline — Three Models](#5-ml-pipeline--three-models)
-6. [Risk-Quantified Dynamic Pricing Engine](#6-risk-quantified-dynamic-pricing-engine)
-7. [Model Performance Results](#7-model-performance-results)
-8. [Feature Engineering](#8-feature-engineering)
-9. [Generated Artefacts](#9-generated-artefacts)
-10. [Key Business Insights](#10-key-business-insights)
-11. [Inference Examples](#11-inference-examples)
-12. [Dependencies](#12-dependencies)
+3. [Prerequisites](#3-prerequisites)
+4. [Running the ML Pipeline](#4-running-the-ml-pipeline)
+5. [Running the Web Application](#5-running-the-web-application)
+6. [API Reference](#6-api-reference)
+7. [Environment Variables](#7-environment-variables)
+8. [Dataset](#8-dataset)
+9. [ML Pipeline — Three Models](#9-ml-pipeline--three-models)
+10. [Risk-Quantified Dynamic Pricing Engine](#10-risk-quantified-dynamic-pricing-engine)
+11. [Model Performance Results](#11-model-performance-results)
+12. [Feature Engineering](#12-feature-engineering)
+13. [Generated Artefacts](#13-generated-artefacts)
+14. [Key Business Insights](#14-key-business-insights)
+15. [Inference Examples](#15-inference-examples)
+16. [Troubleshooting](#16-troubleshooting)
 
 ---
 
@@ -34,6 +38,10 @@ FreightIQ is a three-model machine-learning pipeline that powers a **5-layer ris
 
 The output of Task 3 (`p_return`) feeds directly into the **5-layer pricing engine** as the risk quantification input, computing the optimal quoted freight price for every trip.
 
+The system is delivered as a full-stack web application:
+- **Backend:** FastAPI (Python) on port 5000 — runs ML inference + pricing engine
+- **Frontend:** React 18 + Vite + Tailwind CSS on port 5173 — city autocomplete, freight form, 5-layer pricing dashboard
+
 **Geographic coverage:** Tamil Nadu · Karnataka · Pondicherry · Maharashtra  
 **Weather conditions:** Sunny · Partly Cloudy · Mist · Rainy · Patchy Rain · Light/Heavy Shower
 
@@ -43,79 +51,448 @@ The output of Task 3 (`p_return`) feeds directly into the **5-layer pricing engi
 
 ```
 truckG/
-├── main.py                        # Entry point — trains all 3 models, runs pricing demo
-├── requirements.txt               # Python dependencies
-├── README.md                      # This file
-├── CLAUDE.md                      # Codebase instructions
+├── main.py                            # ML pipeline entry point — trains all 3 models
+├── app.py                             # FastAPI backend server (port 5000)
+├── requirements.txt                   # ML pipeline Python dependencies
+├── requirements_api.txt               # Backend API Python dependencies
+├── README.md                          # This file
+├── CLAUDE.md                          # Codebase context for AI tools
+├── .env.example                       # Backend environment variable template
 │
 ├── src/
 │   ├── __init__.py
-│   ├── data_loader.py             # Excel ingestion + multi-sheet merging
-│   ├── preprocessor.py            # Datetime parsing, NULL handling, cleaning
-│   ├── feature_engineering.py     # Encoders, transformers, feature selection
-│   ├── models.py                  # XGBoost wrappers + CV helpers
-│   ├── evaluation.py              # Metrics, plots, reports
-│   ├── pricing.py                 # 5-layer dynamic pricing engine
-│   └── return_load_model.py       # Task 3: p_return model (LR + XGBoost)
+│   ├── data_loader.py                 # Excel ingestion + multi-sheet merging
+│   ├── preprocessor.py                # Datetime parsing, NULL handling, cleaning
+│   ├── feature_engineering.py         # Encoders, transformers, feature selection
+│   ├── models.py                      # XGBoost wrappers + CV helpers
+│   ├── evaluation.py                  # Metrics, plots, reports, pricing charts
+│   ├── pricing.py                     # 5-layer dynamic pricing engine (standalone)
+│   └── return_load_model.py           # Task 3: p_return model (LR + XGBoost)
 │
-└── ml/                            # Generated artefacts (created by running main.py)
+├── frontend/                          # React 18 web application
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js                 # Vite config — proxies /api to port 5000
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── .env.example                   # Frontend environment variable template
+│   └── src/
+│       ├── main.jsx                   # React entry point
+│       ├── App.jsx                    # Root component — auth state, routing
+│       ├── supabase.js                # Supabase client + DEV_MODE detection
+│       ├── index.css                  # Tailwind + custom utilities
+│       └── components/
+│           ├── AuthPage.jsx           # Login / signup page
+│           ├── InputForm.jsx          # City autocomplete + freight form
+│           └── ResultDashboard.jsx    # 5-layer pricing result dashboard
+│
+└── ml/                                # Generated artefacts (created by running main.py)
     ├── model_classification.pkl       # Task 1 — XGBoost on-time classifier
     ├── model_regression.pkl           # Task 2 — XGBoost delivery-time regressor
     ├── model_p_return_xgb.pkl         # Task 3 — XGBoost p_return model
     ├── model_p_return_lr.pkl          # Task 3 — Logistic Regression p_return model
-    ├── model_p_return_best.pkl        # Task 3 — Winner model (XGBoost)
+    ├── model_p_return_best.pkl        # Task 3 — Best model (XGBoost, AUC 0.9711)
     ├── p_return_meta.pkl              # Feature list + winner name for inference
-    ├── fi_classification.png          # Feature importance — Task 1
-    ├── fi_regression.png              # Feature importance — Task 2
-    ├── p_return_evaluation.png        # ROC, PR curves, distribution — Task 3
-    ├── weather_delay_impact.png       # Weather vs on-time rate chart
-    ├── ev_vs_petrol.png               # EV vs Petrol maintenance cost chart
-    ├── pricing_scenarios.png          # 5 pricing scenario comparison
-    ├── pricing_sensitivity_p_return.png  # Risk cost vs p_return sweep
-    └── pricing_sensitivity_distance.png  # Pricing vs distance sweep
+    └── *.png                          # 8 evaluation and pricing charts
 ```
 
 ---
 
-## 3. Quick Start
+## 3. Prerequisites
 
-### Prerequisites
+### Python
 ```
 Python >= 3.10
 ```
 
-### Install dependencies
-```bash
-pip install -r requirements.txt
+### Node.js (for the web frontend)
+```
+Node.js >= 18.0
+npm >= 9.0
 ```
 
-### Place the dataset
+Check versions:
+```bash
+python --version
+node --version
+npm --version
+```
+
+---
+
+## 4. Running the ML Pipeline
+
+This step trains all three models and saves them to `ml/`. **You must run this before starting the backend.**
+
+### Step 1 — Place the dataset
+
+Put the Excel file in the project root:
 ```
 truckG/
 └── Transportation and Logistics Tracking Dataset..xlsx
 ```
 
-### Run the full pipeline
+### Step 2 — Install ML dependencies
+
 ```bash
-# Train all 3 models + run pricing demo + generate all charts
+cd c:\Desktop\truckG
+pip install -r requirements.txt
+```
+
+`requirements.txt` contents:
+```
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+openpyxl>=3.1.0
+joblib>=1.3.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+```
+
+### Step 3 — Run the pipeline
+
+```bash
+# Full run — trains all models + generates all charts
 python main.py
 
-# Headless / CI mode (no matplotlib windows)
+# Headless / CI mode (suppresses matplotlib windows)
 python main.py --no-plots
 ```
 
-The pipeline will:
-1. Load and clean the dataset
-2. Train Task 1 (on-time classification) + save model
-3. Train Task 2 (delivery time regression) + save model
-4. Train Task 3 (p_return — return-load probability) + save both models
-5. Run the 5-layer pricing engine on 5 representative freight scenarios
-6. Print all output parameters and sensitivity tables
-7. Save 14 artefacts to `ml/`
+### What the pipeline does
+
+```
+Step 1  Load + clean dataset (6,880 GPS pings across 5 sheets)
+Step 2  Train Task 1: On-time delivery classifier   → ml/model_classification.pkl
+Step 3  Train Task 2: Delivery time regressor       → ml/model_regression.pkl
+Step 4  Analyse regional costs + EV vs Petrol charts
+Step 5  Train Task 3: p_return model (LR + XGBoost) → ml/model_p_return_best.pkl
+Step 6  Run 5-layer pricing demo (5 scenarios)
+Step 7  Generate 14 artefacts in ml/
+```
+
+### Expected output
+
+```
+[FreightIQ] Loading dataset...
+[FreightIQ] Training classification model...
+  CV AUC-ROC : 0.9806
+  Test AUC-ROC: 0.9947
+  Test Accuracy: 96.48%
+
+[FreightIQ] Training regression model...
+  CV RMSE: 21.38 hrs
+  Test RMSE: 25.16 hrs
+
+[FreightIQ] Training p_return model...
+  XGBoost  CV AUC=0.9320  Test AUC=0.9711  AvgPrecision=0.7091  <-- WINNER
+  LogReg   CV AUC=0.8731  Test AUC=0.8778  AvgPrecision=0.3067
+
+[FreightIQ] Pricing demo complete. All artefacts saved to ml/
+```
 
 ---
 
-## 4. Dataset
+## 5. Running the Web Application
+
+The web app has two parts: a **FastAPI backend** (Python) and a **React frontend** (Node.js). Run them in two separate terminals simultaneously.
+
+---
+
+### Terminal 1 — Backend (FastAPI on port 5000)
+
+#### Step 1 — Install backend dependencies
+
+```bash
+cd c:\Desktop\truckG
+pip install -r requirements_api.txt
+```
+
+`requirements_api.txt` contents:
+```
+fastapi
+uvicorn[standard]
+httpx
+python-jose[cryptography]
+python-multipart
+pandas
+numpy
+xgboost
+scikit-learn
+joblib
+```
+
+#### Step 2 — (Optional) Configure environment variables
+
+Copy the example file and edit it:
+```bash
+copy .env.example .env
+```
+
+Then open `.env` and fill in your Supabase credentials if you have them (see [Environment Variables](#7-environment-variables)). If you skip this step, the backend runs in **Dev Bypass mode** — all requests are accepted without authentication, which is fine for local development.
+
+#### Step 3 — Start the backend
+
+```bash
+cd c:\Desktop\truckG
+python app.py
+```
+
+You should see:
+```
+[FreightIQ] clf(15 feats)  reg(15 feats)  p_return(16 feats)  winner=XGBoost
+[FreightIQ] SUPABASE_JWT_SECRET not set — Dev Bypass active (no auth required)
+INFO:     Uvicorn running on http://0.0.0.0:5000 (Press CTRL+C to quit)
+INFO:     Started reloader process [XXXXX] using WatchFiles
+```
+
+The backend is now live at **http://localhost:5000**
+
+---
+
+### Terminal 2 — Frontend (React on port 5173)
+
+#### Step 1 — Install frontend dependencies (first time only)
+
+```bash
+cd c:\Desktop\truckG\frontend
+npm install
+```
+
+This installs React, Vite, Tailwind CSS, Lucide icons, and Supabase client (~147 packages).
+
+#### Step 2 — (Optional) Configure Supabase for the frontend
+
+```bash
+copy .env.example .env
+```
+
+Edit `frontend/.env` with your Supabase project URL and anon key. If you skip this, the app runs in **DEV_MODE** — the login page is bypassed automatically.
+
+#### Step 3 — Start the frontend dev server
+
+```bash
+cd c:\Desktop\truckG\frontend
+npm run dev
+```
+
+You should see:
+```
+  VITE v5.x  ready in 300ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.x.x:5173/
+```
+
+Open **http://localhost:5173** in your browser.
+
+---
+
+### Using the Web App
+
+1. **Login screen** — In DEV_MODE the app skips this automatically. With Supabase configured, sign in or create an account.
+
+2. **Enter a freight route:**
+   - Type a city name in **Origin City** (e.g. `Chennai`)
+   - Wait ~300ms for the autocomplete dropdown to appear
+   - **Click a suggestion from the dropdown** — a green dot confirms GPS coordinates are captured
+   - Do the same for **Destination City** (e.g. `Mumbai`)
+   - Set cargo weight, vehicle class, and dispatch date
+
+3. **Click "Get AI Quote"** — the app calls the backend, runs all 3 ML models, and returns the 5-layer pricing breakdown.
+
+4. **Results dashboard shows:**
+   - Final quoted price (INR)
+   - Delay probability % with risk badge
+   - 5-layer pricing breakdown with step-by-step deltas
+   - ML Intelligence Panel: delay %, return load %, delivery hours, confidence
+   - Expandable "Technical Details" with raw model outputs
+
+> **Important:** You must select a city from the autocomplete dropdown, not just type the name. The system needs GPS coordinates to compute the route distance.
+
+---
+
+### Build for Production
+
+To create an optimised production build of the frontend:
+
+```bash
+cd c:\Desktop\truckG\frontend
+npm run build
+```
+
+Output goes to `frontend/dist/`. Serve it with any static file server or configure uvicorn to serve it directly.
+
+---
+
+## 6. API Reference
+
+Base URL: `http://localhost:5000`  
+Interactive docs: `http://localhost:5000/api/docs`
+
+---
+
+### `GET /api/health`
+
+Returns server status and loaded model info.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "dev_bypass": true,
+  "models": {
+    "classifier": "XGBClassifier",
+    "regressor": "XGBRegressor",
+    "p_return": "XGBoost"
+  }
+}
+```
+
+---
+
+### `GET /api/autocomplete?q={query}`
+
+Proxies the Photon geocoding API with India filtering and server-side LRU caching.
+
+**Parameters:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `q` | string | City search query (min 2 characters) |
+
+**Example:**
+```
+GET /api/autocomplete?q=Chennai
+```
+
+**Response:** GeoJSON FeatureCollection (up to 5 Indian cities)
+
+---
+
+### `POST /api/predict`
+
+Runs all 3 ML models + 5-layer pricing engine for a freight route.
+
+**Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer <supabase_jwt>   (optional in Dev Bypass mode)
+```
+
+**Request body:**
+```json
+{
+  "origin": "Chennai, Tamil Nadu",
+  "destination": "Mumbai, Maharashtra",
+  "origin_coords": { "lat": 13.0827, "lon": 80.2707 },
+  "destination_coords": { "lat": 19.0760, "lon": 72.8777 },
+  "origin_state": "Tamil Nadu",
+  "destination_state": "Maharashtra",
+  "weight_tons": 15.0,
+  "vehicle_class": "heavy",
+  "date": "2026-05-15T08:00:00"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `origin` | string | yes | Origin city display name |
+| `destination` | string | yes | Destination city display name |
+| `origin_coords` | object | yes | `{lat, lon}` from autocomplete |
+| `destination_coords` | object | yes | `{lat, lon}` from autocomplete |
+| `origin_state` | string | no | State name for region detection |
+| `destination_state` | string | no | State name for region detection |
+| `weight_tons` | float | yes | Cargo weight in tons (0.5 – 60) |
+| `vehicle_class` | string | yes | `mini` / `medium` / `heavy` / `trailer` |
+| `date` | string | no | ISO 8601 dispatch date-time |
+
+**Vehicle classes:**
+| Value | Label | Capacity |
+|-------|-------|---------|
+| `mini` | Mini Truck | Up to 1 ton |
+| `medium` | SXL / LCV | 1 – 7 tons |
+| `heavy` | HCV Multi-Axle | 7 – 20 tons |
+| `trailer` | 24 FT Container | 20+ tons |
+
+**Response:**
+```json
+{
+  "route": {
+    "origin": "Chennai, Tamil Nadu",
+    "destination": "Mumbai, Maharashtra",
+    "distance_km": 1363.7,
+    "region": "Maharashtra"
+  },
+  "ml": {
+    "delay_probability": 0.0122,
+    "on_time_probability": 0.9878,
+    "delivery_hours": 19.62,
+    "p_return": 0.001,
+    "confidence": 0.9756
+  },
+  "pricing": {
+    "operational": 2045.5,
+    "risk_adjusted": 2352.05,
+    "ml_optimized": 2163.89,
+    "market_price": 2347.25,
+    "final_price": 2347.25,
+    "risk_factor": 0.1498,
+    "efficiency": 0.9,
+    "capped": true,
+    "corridor_avg": 2761.47
+  },
+  "trip": {
+    "weight_tons": 15.0,
+    "vehicle_class": "heavy",
+    "date": "2026-05-15T08:00:00"
+  },
+  "meta": {
+    "user": "dev-user",
+    "dev_bypass": true
+  }
+}
+```
+
+**Error responses:**
+| Status | Condition |
+|--------|-----------|
+| 401 | Missing or invalid JWT (when not in Dev Bypass) |
+| 422 | Origin and destination are the same location |
+
+---
+
+## 7. Environment Variables
+
+### Backend (`.env` in project root)
+
+```env
+# Supabase JWT secret for token verification
+# Get this from: Supabase Dashboard → Project Settings → API → JWT Secret
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret_here
+```
+
+If `SUPABASE_JWT_SECRET` is not set, the server starts in **Dev Bypass mode** — all API requests are accepted without authentication. This is the default for local development.
+
+### Frontend (`frontend/.env`)
+
+```env
+# Your Supabase project URL
+# Get from: Supabase Dashboard → Project Settings → API
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+
+# Your Supabase anonymous public key
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
+
+If either variable is missing, the frontend runs in **DEV_MODE** — the login/signup screen is skipped and you go straight to the freight form.
+
+> **Security note:** Never commit `.env` files. Both `.env` files are in `.gitignore`.
+
+---
+
+## 8. Dataset
 
 ### Source Sheets
 
@@ -156,7 +533,7 @@ Preprocessing --> Feature Engineering --> XGBoost Models --> Pricing Engine
 
 ---
 
-## 5. ML Pipeline — Three Models
+## 9. ML Pipeline — Three Models
 
 ### Task 1 — On-Time Delivery Classification
 
@@ -165,17 +542,13 @@ Preprocessing --> Feature Engineering --> XGBoost Models --> Pricing Engine
 **Train/Test split:** 80/20, stratified  
 **Cross-validation:** 5-fold stratified  
 
-```
-python main.py  # trains and saves to ml/model_classification.pkl
-```
-
 **Inference:**
 ```python
 from src.models import load_model
 
 clf = load_model("ml/model_classification.pkl")
-prediction = clf.predict(X_new)      # 0 = Delayed, 1 = On-Time
-probability = clf.predict_proba(X_new)[:, 1]   # delay risk score
+prediction  = clf.predict(X_new)               # 0 = Delayed, 1 = On-Time
+probability = clf.predict_proba(X_new)[:, 1]   # on-time probability
 ```
 
 ---
@@ -185,20 +558,19 @@ probability = clf.predict_proba(X_new)[:, 1]   # delay risk score
 **Target:** `Delivery_Time` (hours)  
 **Algorithm:** XGBoost Regressor  
 **Objective:** reg:squarederror  
-**Cross-validation:** 5-fold  
 
 ```python
-reg = load_model("ml/model_regression.pkl")
-hours = reg.predict(X_new)           # estimated delivery hours
+reg   = load_model("ml/model_regression.pkl")
+hours = reg.predict(X_new)   # estimated delivery hours
 ```
 
 ---
 
 ### Task 3 — Return-Load Probability (p_return)
 
-**Target proxy:** `is_market` — Market bookings (spot market = active corridor demand in both directions = higher return-load availability).  
+**Target proxy:** `is_market` — Market bookings indicate active spot-market corridor demand in both directions = higher return-load availability.  
 **Class imbalance:** 40 Market vs 667 Regular (16.7x) — handled via `scale_pos_weight` (XGBoost) and `class_weight='balanced'` (Logistic Regression).  
-**Models trained:** Logistic Regression + XGBoost (both saved; best selected by Test AUC-ROC).  
+**Models trained:** Logistic Regression + XGBoost — winner selected by Test AUC-ROC.
 
 **Features used (16 total):**
 
@@ -220,75 +592,60 @@ hours = reg.predict(X_new)           # estimated delivery hours
 | `on_time` | Refined | Route demand/reliability indicator |
 | `time_delta_hours` | ETAs | Route performance |
 
-**Inference:**
-```python
-from src.return_load_model import load_p_return_model, predict_p_return
-
-model = load_p_return_model("ml")
-p = predict_p_return(model, {
-    "log_distance_km": 5.08,
-    "route_freq": 12,
-    "day_of_week": 1,
-    "month": 8,
-    "region_code": 0,
-    # ... other features
-})
-# p = 0.73  --> 73% chance of securing return load
-```
-
 ---
 
-## 6. Risk-Quantified Dynamic Pricing Engine
+## 10. Risk-Quantified Dynamic Pricing Engine
 
-The three ML models feed into a **5-layer pricing engine** (`src/pricing.py`) that computes the optimal quoted freight price.
+All pricing output values are divided by 150 to produce market-calibrated INR quotes.
 
 ### Layer 1 — Operational Base Cost
 
 ```
-F_loaded  = D / M_loaded
-F_empty   = D / M_empty
-Base_cost = (F_loaded + F_empty) * P_diesel + C_toll + C_driver + C_maint + C_load + C_unload
-
-E_mod     = 1 + omega * Urgency + eta * Time_of_Day_Factor
-Base_cost_modified = Base_cost * E_mod
+Base = distance_km × weight_tons × vehicle_rate_per_ton_km
 ```
 
-### Layer 2 — Risk Quantification (ML Layer)
+Vehicle rates: Mini=8 · Medium=12 · Heavy=15 · Trailer=20 INR/ton/km
+
+### Layer 2 — Risk Adjustment (p_return from Task 3)
 
 ```
-Empty_return_cost = F_empty * P_diesel + C_toll + C_driver + C_maint + C_parking
-Risk_cost         = (1 - p_return) * Empty_return_cost        # p_return from Task 3 XGBoost
-Risk_factor       = Risk_cost / Base_cost_modified
+Risk_multiplier = (1 - p_return) × 0.15
+Risk_adjusted   = Base × (1 + Risk_multiplier)
 ```
 
-### Layer 3 — Cost-Optimal Model Price
+Higher empty-return risk → higher price. If `p_return = 0.0` (no chance of backhaul), the price increases 15% over base.
+
+### Layer 3 — ML Efficiency Optimisation
 
 ```
-x1 = (I_demand / I_supply - mu_1) / sigma_1       # demand/supply signal
-x2 = ((P_compet - Base_cost) / Base_cost - mu_2) / sigma_2   # competitor gap signal
-Market_adj  = gamma * x1 + delta * x2
-Model_price = Base_cost_modified * (1 + Risk_factor + Market_adj)
+Expected_hours = distance_km / 45              # 45 km/h average speed
+Efficiency     = clamp(Expected_hours / Delivery_hours, 0.1, 0.9)
+ML_price       = Risk_adjusted × (1.10 - Efficiency × 0.20)
 ```
 
-### Layer 4 — Market-Feasible Quoted Price
+Faster-than-expected delivery = lower price; slower = higher price.
+
+### Layer 4 — Competitive Market Snap
 
 ```
-Market_cap   = P_compet * (1 + epsilon)            # epsilon ~ 7%
-Quoted_price = min(Model_price, Market_cap)
+Corridor_average = Base × 1.35
+Market_low       = Corridor × 0.85
+Market_high      = Corridor × 1.15
+Market_price     = clamp(ML_price, Market_low, Market_high)
 ```
 
-### Layer 5 — Profit Optimisation & Driver Feasibility
+Price is capped within ±15% of the corridor average to remain competitive.
+
+### Layer 5 — Margin Floor Gate
 
 ```
-Delta_P          = Quoted_price - P_compet
-P(book | Delta_P) = sigmoid(a - b * Delta_P)       # a, b learned from booking data
-E[Profit]        = P(book) * (Quoted_price - Base_cost_modified)
-
-Driver_earnings  = Quoted_price - (F_loaded * E_mod + C_toll + C_load + C_unload)
-Feasible         = Driver_earnings >= R_driver      # if False -> trip flagged INFEASIBLE
+Margin_floor = Base × 1.10
+Final_price  = max(Market_price, Margin_floor)
 ```
 
-### Pricing Engine Usage
+Ensures at minimum a 10% margin over raw operational cost.
+
+### Pricing Engine (standalone usage)
 
 ```python
 from src.pricing import FreightPricingEngine, PricingInput
@@ -297,36 +654,17 @@ engine = FreightPricingEngine()
 result = engine.compute(PricingInput(
     label="Chennai to Pune",
     distance_km=1_350.0,
-    m_loaded=3.8,
-    m_empty=5.5,
-    p_diesel=93.5,
-    c_toll=2_200.0,
-    c_driver=3_000.0,
-    c_maint=700.0,
-    c_load=500.0,
-    c_unload=500.0,
+    p_return=0.41,        # from ml/model_p_return_best.pkl
     p_compet=55_000.0,
     i_demand=1.3,
     i_supply=0.9,
-    p_return=0.41,        # from ml/model_p_return_best.pkl
 ))
-
 print(result.summary())
-# Prints all 5 layers with INR values
-```
-
-**Sensitivity sweeps available:**
-```python
-# Sweep p_return 0 -> 1
-df = engine.sweep_p_return(base_input, n=11)
-
-# Sweep distances [50, 100, 160, 250, 400, 600, 900 km]
-df = engine.sweep_distance(base_input)
 ```
 
 ---
 
-## 7. Model Performance Results
+## 11. Model Performance Results
 
 ### Task 1 — On-Time Delivery Classification
 
@@ -335,11 +673,8 @@ df = engine.sweep_distance(base_input)
 | AUC-ROC | 0.9806 | 0.9947 |
 | Accuracy | 96.46% | 96.48% |
 | F1-Score | 0.9753 | 0.9804 |
-| Precision (On-Time) | — | 0.97 |
-| Recall (On-Time) | — | 0.98 |
 
 Confusion matrix (test set, 142 samples):
-
 ```
               Predicted
               Delayed   On-Time
@@ -354,8 +689,6 @@ Actual  Delayed    35        3
 | RMSE | 21.38 hrs | 25.16 hrs |
 | MAE | 17.30 hrs | 18.99 hrs |
 
-*Note: High MAPE is expected on short-haul dominated datasets where small absolute errors produce large percentage errors near zero.*
-
 ### Task 3 — Return-Load Probability
 
 | Model | CV AUC-ROC | Test AUC-ROC | Avg Precision |
@@ -363,33 +696,20 @@ Actual  Delayed    35        3
 | Logistic Regression | 0.8731 | 0.8778 | 0.3067 |
 | **XGBoost (Winner)** | **0.9320** | **0.9711** | **0.7091** |
 
-XGBoost confusion matrix (test set, 142 samples, 16.7x imbalance):
-
-```
-              Predicted
-              Regular   Market
-Actual  Regular   130       4
-        Market      3       5
-```
-
-**Top features by XGBoost importance:**
-
+Top features by XGBoost importance:
 ```
 route_freq          0.1917  ######################################
 log_distance_km     0.1640  ################################
 distance_km         0.1120  ######################
 region_code         0.0826  ################
 time_delta_hours    0.0629  ############
-on_time             0.0520  ##########
-month               0.0512  ##########
-is_weekend          0.0445  ########
 ```
 
 ---
 
-## 8. Feature Engineering
+## 12. Feature Engineering
 
-All transformers are sklearn-compatible (`BaseEstimator`, `TransformerMixin`) and live in `src/feature_engineering.py`.
+All transformers are sklearn-compatible and live in `src/feature_engineering.py`.
 
 | Transformer | Input | Output |
 |-------------|-------|--------|
@@ -413,7 +733,7 @@ All transformers are sklearn-compatible (`BaseEstimator`, `TransformerMixin`) an
 
 ---
 
-## 9. Generated Artefacts
+## 13. Generated Artefacts
 
 All artefacts are written to `ml/` when you run `python main.py`.
 
@@ -436,7 +756,7 @@ All artefacts are written to `ml/` when you run `python main.py`.
 
 ---
 
-## 10. Key Business Insights
+## 14. Key Business Insights
 
 ### Weather vs On-Time Delivery
 - **Sunny** conditions: highest on-time rate (~73%)
@@ -452,7 +772,7 @@ All artefacts are written to `ml/` when you run `python main.py`.
 | Maharashtra | ~INR 9,200 | ~INR 960 | ~INR 8,240 |
 | Pondicherry | ~INR 7,800 | ~INR 840 | ~INR 6,960 |
 
-Maharashtra routes are 7% costlier than Tamil Nadu — justifying a regional price floor adjustment in the pricing engine.
+Maharashtra routes are 7% costlier than Tamil Nadu — justifying a regional price floor adjustment.
 
 ### EV vs Petrol Fleet Planning
 
@@ -461,108 +781,101 @@ Maharashtra routes are 7% costlier than Tamil Nadu — justifying a regional pri
 | EV | 43.27 | Lakhs INR |
 | Petrol | 33.33 | Thousands INR |
 
-EV trucks carry maintenance costs in **Lakhs** vs Petrol in **Thousands** — a ~13x difference in absolute cost. Implication for pricing:
-- **EV trips:** Higher `C_maint` raises the empty-return cost floor, making `p_return` the most financially critical variable
-- **Recommendation:** Assign EV trucks preferentially to high-volume, high-`p_return` corridors (Tamil Nadu metro-metro lanes) until EV maintenance costs normalise
-
-### Distance & Pricing Feasibility
-- Median trip: **160 km** (short-haul dominated)
-- At current competitor pricing (~INR 11,500 cap), trips **> 500 km** become unprofitable
-- At **600+ km**, driver earnings turn negative — trip flagged INFEASIBLE by the pricing engine
+EV trucks carry ~13x higher absolute maintenance costs. Assign EV trucks to high-volume, high-`p_return` corridors to minimise empty-return risk.
 
 ---
 
-## 11. Inference Examples
+## 15. Inference Examples
 
-### Full pricing quote for a trip
+### Get a freight quote from the API
+
+```bash
+curl -X POST http://localhost:5000/api/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origin": "Chennai, Tamil Nadu",
+    "destination": "Mumbai, Maharashtra",
+    "origin_coords": {"lat": 13.0827, "lon": 80.2707},
+    "destination_coords": {"lat": 19.0760, "lon": 72.8777},
+    "weight_tons": 15,
+    "vehicle_class": "heavy",
+    "date": "2026-05-15T08:00:00"
+  }'
+```
+
+### Load models directly in Python
 
 ```python
 import joblib
-from src.pricing import FreightPricingEngine, PricingInput
-from src.return_load_model import predict_p_return
-
-# Load models
-p_return_model = joblib.load("ml/model_p_return_best.pkl")
-
-# Get p_return from ML model
-trip_features = {
-    "log_distance_km": 5.08,
-    "distance_km": 160.0,
-    "day_of_week": 1,           # Tuesday
-    "month": 8,                  # August
-    "hour": 10,
-    "is_weekend": 0,
-    "route_freq": 8,
-    "weather_severity": 3,
-    "adverse_weather": 1,
-    "region_code": 0,            # Tamil Nadu
-    "Fixed Costs": 8400,
-    "Maintenance": 900,
-    "Difference": 7500,
-    "Customer_rating": 4.2,
-    "on_time": 1,
-    "time_delta_hours": -2.5,
-}
-p_return = predict_p_return(p_return_model, trip_features)
-
-# Compute full quoted price
-engine = FreightPricingEngine()
-result = engine.compute(PricingInput(
-    label="Chennai Central",
-    distance_km=160.0,
-    p_return=p_return,
-    p_compet=13_000.0,
-    i_demand=1.3,
-    i_supply=1.0,
-))
-print(result.summary())
-```
-
-### Check on-time delivery probability
-
-```python
-from src.models import load_model
 import pandas as pd
+from src.models import load_model
 
-clf = load_model("ml/model_classification.pkl")
+clf   = load_model("ml/model_classification.pkl")
+reg   = load_model("ml/model_regression.pkl")
+p_ret = joblib.load("ml/model_p_return_best.pkl")
 
-X_new = pd.DataFrame([{
-    "distance_km": 160,
-    "log_distance_km": 5.08,
-    "weather_severity": 3,
-    "adverse_weather": 1,
-    "region_code": 0,
-    "Fixed Costs": 8400,
-    "Maintenance": 900,
-    "Difference": 7500,
-    "Customer_rating": 4,
-    "time_delta_hours": 0,
-    "is_market": 0,
+X = pd.DataFrame([{
+    "distance_km": 160, "log_distance_km": 5.08,
+    "weather_severity": 3, "adverse_weather": 1,
+    "region_code": 0, "Fixed Costs": 8400,
+    "Maintenance": 900, "Difference": 7500,
+    "Customer_rating": 4, "time_delta_hours": 0, "is_market": 0,
+    # vtype one-hot columns (set the matching one to 1.0)
+    "vtype_Other": 1.0,
+    "vtype_32 FT Single-Axle 7MT - HCV": 0.0,
+    "vtype_32 FT Multi-Axle 14MT - HCV": 0.0,
+    "vtype_24 FT SXL Container": 0.0,
 }])
 
-print(clf.predict(X_new))           # [1] = On-Time
-print(clf.predict_proba(X_new))     # [[0.07, 0.93]]
+print(clf.predict(X))            # [1] = On-Time
+print(clf.predict_proba(X))      # [[0.07, 0.93]]
+print(reg.predict(X))            # [18.4] hours
 ```
 
 ---
 
-## 12. Dependencies
+## 16. Troubleshooting
 
-```
-pandas>=2.0.0
-numpy>=1.24.0
-scikit-learn>=1.3.0
-xgboost>=2.0.0
-openpyxl>=3.1.0
-joblib>=1.3.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-```
+### "Get AI Quote" button is disabled
+The button only activates after selecting cities from the autocomplete dropdown — you must click a suggestion, not just type. A small green dot on the input field confirms coordinates are captured.
 
-Install with:
+### Autocomplete dropdown does not appear
+The backend must be running on port 5000. Check:
 ```bash
-pip install -r requirements.txt
+# Should return {"status": "ok", ...}
+curl http://localhost:5000/api/health
 ```
+If the backend is not running, start it with `python app.py` in a terminal inside `c:\Desktop\truckG`.
+
+### Backend fails to start — "No such file or directory: ml/model_classification.pkl"
+The ML models have not been trained yet. Run `python main.py` first to generate all `.pkl` files in `ml/`.
+
+### Backend fails to start — "ModuleNotFoundError"
+Install the API dependencies:
+```bash
+pip install -r requirements_api.txt
+```
+
+### Frontend fails to start — "sh: vite: command not found"
+Node modules are not installed:
+```bash
+cd c:\Desktop\truckG\frontend
+npm install
+```
+
+### Port already in use
+```bash
+# Find and kill process on port 5000 (Windows)
+netstat -ano | findstr :5000
+taskkill /PID <PID> /F
+
+# Find and kill process on port 5173 (Windows)
+netstat -ano | findstr :5173
+taskkill /PID <PID> /F
+```
+
+### CORS error in browser
+The backend allows `localhost:5173` and `localhost:3000` by default. If you are running the frontend on a different port, add it to the `allow_origins` list in `app.py`.
 
 ---
 
@@ -574,8 +887,10 @@ pip install -r requirements.txt
 | Tune model hyperparameters | `src/models.py` | `_COMMON` dict |
 | Add evaluation charts | `src/evaluation.py` | New `plot_*` function |
 | Add new data sheets | `src/data_loader.py` | New `load_*` function |
-| Change pricing formula | `src/pricing.py` | `FreightPricingEngine.compute()` |
+| Change pricing formula | `app.py` | `five_layer_price()` function |
+| Change pricing divisor | `app.py` | `/ 150` in `five_layer_price()` return dict |
 | Add p_return features | `src/return_load_model.py` | `FEATURES` list + `_engineer_features()` |
+| Add frontend pages | `frontend/src/` | New component in `components/` |
 
 ---
 
